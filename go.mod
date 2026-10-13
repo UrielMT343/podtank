@@ -1,6 +1,6 @@
 module github.com/UrielMT343/podtank
 
-go 1.26.1
+go 1.27.2
 
 require github.com/hajimehoshi/ebiten/v2 v2.10.3
 
