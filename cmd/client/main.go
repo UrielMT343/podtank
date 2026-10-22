@@ -24,7 +24,7 @@ func Init() (battlefield *arena.Arena, player1 *tank.Tank) {
 	b := arena.NewArena(cellGridHeight, cellGridWidth, arenaGridHeight,
 		arenaGridWidth, layoutWidth, layoutHeight)
 
-	t1 := tank.NewTank(b.X, b.Y, cellGridWidth, cellGridHeight, int(tank.None))
+	t1 := tank.NewTank(b.X, b.Y, cellGridWidth, cellGridHeight, tank.Down, tank.Player1)
 
 	return &b, &t1
 }

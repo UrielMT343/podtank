@@ -1,14 +1,18 @@
 package tank
 
 import (
-	"image/color"
 	"math"
 
+	"github.com/UrielMT343/podtank/assets"
+
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
 type TankDirection int
+
+type Player byte
 
 const (
 	initialHP                  = 5
@@ -21,6 +25,8 @@ const (
 	Down
 	Left
 	Right
+	Player1 Player = '1'
+	Player2 Player = '2'
 )
 
 type Tank struct {
@@ -28,13 +34,16 @@ type Tank struct {
 	OffsetX, OffsetY float64
 	Height, Width    int
 	Direction        TankDirection
+	lastDirection    TankDirection
 	HealthPoints     int
 	Damage           int
 	Speed            int
 	Image            *ebiten.Image
+	Player           Player
+	scaleX, scaleY   float64
 }
 
-func NewTank(startX, startY float64, tankWidth, tankHeight, initialDirection int) Tank {
+func NewTank(startX, startY float64, tankWidth, tankHeight int, initialDirection TankDirection, player Player) Tank {
 	var tank Tank
 	tank.HealthPoints = initialHP
 
@@ -47,13 +56,25 @@ func NewTank(startX, startY float64, tankWidth, tankHeight, initialDirection int
 	tank.Height = tankHeight
 	tank.Width = tankWidth
 
-	tank.Direction = TankDirection(initialDirection)
+	tank.Direction = initialDirection
+	tank.lastDirection = initialDirection
 	tank.Damage = initialDmg
 	tank.Speed = initialSpd
 
-	i := ebiten.NewImage(tankWidth, tankHeight)
-	i.Fill(color.White)
-	tank.Image = i
+	tank.Player = player
+
+	if player == Player1 {
+		spriteP1, img, _ := ebitenutil.NewImageFromFileSystem(assets.FS, "sprites/tank_blue.png")
+		s := img.Bounds().Size()
+
+		scaleX := float64(tank.Width) / float64(s.X)
+		scaleY := float64(tank.Height) / float64(s.Y)
+
+		tank.scaleX = scaleX
+		tank.scaleY = scaleY
+
+		tank.Image = spriteP1
+	}
 
 	return tank
 }
@@ -106,12 +127,16 @@ func (t *Tank) Update(collisions *[][]byte) {
 	if t.Direction == None {
 		if upFrames >= 1 {
 			t.Direction = Up
+			t.lastDirection = Up
 		} else if downFrames >= 1 {
 			t.Direction = Down
+			t.lastDirection = Down
 		} else if leftFrames >= 1 {
 			t.Direction = Left
+			t.lastDirection = Left
 		} else if rightFrames >= 1 {
 			t.Direction = Right
+			t.lastDirection = Right
 		}
 	}
 
@@ -197,6 +222,34 @@ func (t *Tank) Update(collisions *[][]byte) {
 
 func (t *Tank) Draw(screen *ebiten.Image) {
 	options := &ebiten.DrawImageOptions{}
+	options.Filter = ebiten.FilterNearest
+
+	options.GeoM.Scale(t.scaleX, t.scaleY)
+
+	dir := t.Direction
+	if dir == None {
+		dir = t.lastDirection
+	}
+
+	switch dir {
+	case Up:
+		options.GeoM.Translate(-25, -25)
+		options.GeoM.Rotate(math.Pi)
+		options.GeoM.Translate(25, 25)
+	case Down:
+		options.GeoM.Translate(-25, -25)
+		options.GeoM.Rotate(0.0)
+		options.GeoM.Translate(25, 25)
+	case Left:
+		options.GeoM.Translate(-25, -25)
+		options.GeoM.Rotate(math.Pi / 2)
+		options.GeoM.Translate(25, 25)
+	case Right:
+		options.GeoM.Translate(-25, -25)
+		options.GeoM.Rotate((3 * math.Pi) / 2)
+		options.GeoM.Translate(25, 25)
+	}
+
 	options.GeoM.Translate(t.X+t.OffsetX, t.Y+t.OffsetY)
 
 	screen.DrawImage(t.Image, options)
