@@ -16,7 +16,7 @@ type Arena struct {
 	Collisions    [][]byte
 }
 
-func NewArena(height, width, heightGridSize, widthGridSize, screenWidth, screenHeight int) Arena {
+func NewArena(height, width, heightGridSize, widthGridSize, screenWidth, screenHeight int) *Arena {
 	arenaWidth := width * widthGridSize
 	arenaHeight := height * heightGridSize
 
@@ -76,7 +76,7 @@ func NewArena(height, width, heightGridSize, widthGridSize, screenWidth, screenH
 	arena.X = float64(posX)
 	arena.Y = float64(posY)
 
-	return arena
+	return &arena
 }
 
 func (a *Arena) Draw(screen *ebiten.Image) {

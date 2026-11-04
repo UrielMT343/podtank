@@ -20,22 +20,26 @@ const (
 	layoutHeight = 900
 )
 
-func Init() (battlefield *arena.Arena, player1 *tank.Tank) {
+func Start() (battlefield *arena.Arena, player1 *tank.Tank, bulletPool *tank.BulletPool) {
 	b := arena.NewArena(cellGridHeight, cellGridWidth, arenaGridHeight,
 		arenaGridWidth, layoutWidth, layoutHeight)
 
 	t1 := tank.NewTank(b.X, b.Y, cellGridWidth, cellGridHeight, tank.Down, tank.Player1)
 
-	return &b, &t1
+	bp := tank.NewBulletPool(50)
+
+	return b, t1, bp
 }
 
 type Game struct {
 	Battlefield *arena.Arena
 	Player1     *tank.Tank
+	BulletPool  *tank.BulletPool
 }
 
 func (g *Game) Update() error {
-	g.Player1.Update(&g.Battlefield.Collisions)
+	g.Player1.Update(&g.Battlefield.Collisions, g.BulletPool)
+	g.BulletPool.Update(&g.Battlefield.Collisions)
 	return nil
 }
 
@@ -44,6 +48,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Bounds()
 	g.Battlefield.Draw(screen)
 	g.Player1.Draw(screen)
+	g.BulletPool.Draw(screen)
 }
 
 // Takes the original size and converts it to a more logical size
@@ -61,8 +66,12 @@ func main() {
 
 	ebiten.SetWindowSize(targetWidth, targetHeight)
 	ebiten.SetWindowTitle("Podtank")
-	b, t1 := Init()
-	if err := ebiten.RunGame(&Game{Battlefield: b, Player1: t1}); err != nil {
+	b, t1, bp := Start()
+	if err := ebiten.RunGame(&Game{
+		Battlefield: b,
+		Player1:     t1,
+		BulletPool:  bp,
+	}); err != nil {
 		log.Fatal(err)
 	}
 }
