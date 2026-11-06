@@ -7,12 +7,15 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
 type TankDirection int
 
 type Player byte
+
+type CmdState struct {
+	Up, Down, Left, Right, Shoot bool
+}
 
 const (
 	initialHP                  = 5
@@ -31,23 +34,24 @@ const (
 )
 
 type Tank struct {
-	x, y, offsetX, offsetY, scaleX, scaleY     float64
-	direction, lastDirection                   TankDirection
-	height, width, healthPoints, damage, speed int
-	image                                      *ebiten.Image
-	Player                                     Player
-	shotCooldown                               int
+	x, y, offsetX, offsetY, scaleX, scaleY        float64
+	direction, lastDirection                      TankDirection
+	height, width, healthPoints, damage, speed    int
+	image                                         *ebiten.Image
+	Player                                        Player
+	shotCooldown                                  int
+	upFrames, downFrames, leftFrames, rightFrames int
 }
 
-func NewTank(startX, startY float64, tankWidth, tankHeight int, initialDirection TankDirection, player Player) *Tank {
+func NewTank(spawnX, spawnY, screenOffsetX, screenOffsetY float64, tankWidth, tankHeight int, initialDirection TankDirection, player Player) *Tank {
 	var tank Tank
 	tank.healthPoints = initialHP
 
-	tank.x = 0
-	tank.y = 0
+	tank.x = spawnX
+	tank.y = spawnY
 
-	tank.offsetX = startX
-	tank.offsetY = startY
+	tank.offsetX = screenOffsetX
+	tank.offsetY = screenOffsetY
 
 	tank.height = tankHeight
 	tank.width = tankWidth
@@ -59,18 +63,23 @@ func NewTank(startX, startY float64, tankWidth, tankHeight int, initialDirection
 
 	tank.Player = player
 
+	var imagePath string
 	if player == Player1 {
-		spriteP1, img, _ := ebitenutil.NewImageFromFileSystem(assets.FS, "sprites/tank_blue.png")
-		s := img.Bounds().Size()
-
-		scaleX := float64(tank.width) / float64(s.X)
-		scaleY := float64(tank.height) / float64(s.Y)
-
-		tank.scaleX = scaleX
-		tank.scaleY = scaleY
-
-		tank.image = spriteP1
+		imagePath = "sprites/tank_blue.png"
+	} else {
+		imagePath = "sprites/tank_red.png"
 	}
+
+	sprite, img, err := ebitenutil.NewImageFromFileSystem(assets.FS, imagePath)
+	if err != nil {
+		panic(err)
+	}
+
+	s := img.Bounds().Size()
+
+	tank.scaleX = float64(tank.width) / float64(s.X)
+	tank.scaleY = float64(tank.height) / float64(s.Y)
+	tank.image = sprite
 
 	return &tank
 }
@@ -120,8 +129,6 @@ func (t *Tank) Shoot(pool *BulletPool) {
 	b := pool.pool[lastIdx]
 	pool.pool = pool.pool[:lastIdx]
 
-	b.Player = t.Player
-
 	b.x = t.x + float64(t.width)/2.0
 	b.y = t.y + float64(t.height)/2.0
 
@@ -149,40 +156,69 @@ func (t *Tank) Shoot(pool *BulletPool) {
 		b.vy = 0
 	}
 
+	bulleDir := t.direction
+	if bulleDir == None {
+		bulleDir = t.lastDirection
+	}
+
+	b.dir = bulleDir
+
 	pool.active = append(pool.active, b)
 }
 
-func (t *Tank) Update(collisions *[][]byte, bp *BulletPool) {
+func (t *Tank) IsDead() bool {
+	return t.healthPoints <= 0
+}
+
+func (t *Tank) HP() int {
+	return t.healthPoints
+}
+
+func (t *Tank) Update(cmd CmdState, collisions *[][]byte, bp *BulletPool) {
 	mov := float64(t.speed) / 50.0
 	pixelNearest := 5.0
 
-	upFrames := inpututil.KeyPressDuration(ebiten.KeyArrowUp)
-	downFrames := inpututil.KeyPressDuration(ebiten.KeyArrowDown)
-	leftFrames := inpututil.KeyPressDuration(ebiten.KeyArrowLeft)
-	rightFrames := inpututil.KeyPressDuration(ebiten.KeyArrowRight)
+	if cmd.Up {
+		t.upFrames++
+	} else {
+		t.upFrames = 0
+	}
+	if cmd.Down {
+		t.downFrames++
+	} else {
+		t.downFrames = 0
+	}
+	if cmd.Left {
+		t.leftFrames++
+	} else {
+		t.leftFrames = 0
+	}
+	if cmd.Right {
+		t.rightFrames++
+	} else {
+		t.rightFrames = 0
+	}
 
 	if t.shotCooldown > 0 {
 		t.shotCooldown--
 	}
 
-	shoot := inpututil.IsKeyJustPressed(ebiten.KeySpace)
-
-	if shoot && t.shotCooldown == 0 {
+	if cmd.Shoot && t.shotCooldown == 0 {
 		t.Shoot(bp)
 		t.shotCooldown = 60
 	}
 
 	if t.direction == None {
-		if upFrames >= 1 {
+		if t.upFrames >= 1 {
 			t.direction = Up
 			t.lastDirection = Up
-		} else if downFrames >= 1 {
+		} else if t.downFrames >= 1 {
 			t.direction = Down
 			t.lastDirection = Down
-		} else if leftFrames >= 1 {
+		} else if t.leftFrames >= 1 {
 			t.direction = Left
 			t.lastDirection = Left
-		} else if rightFrames >= 1 {
+		} else if t.rightFrames >= 1 {
 			t.direction = Right
 			t.lastDirection = Right
 		}
@@ -193,8 +229,8 @@ func (t *Tank) Update(collisions *[][]byte, bp *BulletPool) {
 
 	switch t.direction {
 	case Up:
-		if upFrames > 0 {
-			if upFrames > moveDelay {
+		if t.upFrames > 0 {
+			if t.upFrames > moveDelay {
 				t.y -= mov
 
 				nearestX := math.Round(t.x/50.0) * 50.0
@@ -210,8 +246,8 @@ func (t *Tank) Update(collisions *[][]byte, bp *BulletPool) {
 			}
 		}
 	case Down:
-		if downFrames > 0 {
-			if downFrames > moveDelay {
+		if t.downFrames > 0 {
+			if t.downFrames > moveDelay {
 				t.y += mov
 
 				nearestX := math.Round(t.x/50.0) * 50.0
@@ -227,8 +263,8 @@ func (t *Tank) Update(collisions *[][]byte, bp *BulletPool) {
 			}
 		}
 	case Left:
-		if leftFrames > 0 {
-			if leftFrames > moveDelay {
+		if t.leftFrames > 0 {
+			if t.leftFrames > moveDelay {
 				t.x -= mov
 
 				nearestY := math.Round(t.y/50.0) * 50.0
@@ -244,8 +280,8 @@ func (t *Tank) Update(collisions *[][]byte, bp *BulletPool) {
 			}
 		}
 	case Right:
-		if rightFrames > 0 {
-			if rightFrames > moveDelay {
+		if t.rightFrames > 0 {
+			if t.rightFrames > moveDelay {
 				t.x += mov
 
 				nearestY := math.Round(t.y/50.0) * 50.0

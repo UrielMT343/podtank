@@ -1,47 +1,58 @@
 package tank
 
 import (
-	"image/color"
+	"math"
 
+	"github.com/UrielMT343/podtank/assets"
 	"github.com/hajimehoshi/ebiten/v2"
-)
-
-const (
-	bulletWidth  = 15
-	bulletHeight = 15
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 type Bullet struct {
 	x, y, vx, vy     float64
 	offsetX, offsetY float64
-	Player           Player
+	dir              TankDirection
 }
 
 type BulletPool struct {
-	pool      []*Bullet
-	active    []*Bullet
-	bulletImg *ebiten.Image
+	pool           []*Bullet
+	active         []*Bullet
+	bulletImg      *ebiten.Image
+	Owner          Player
+	scaleX, scaleY float64
 }
 
-func NewBulletPool(size int) *BulletPool {
+func NewBulletPool(size int, owner Player) *BulletPool {
 	bp := BulletPool{
 		pool:   make([]*Bullet, 0, size),
 		active: make([]*Bullet, 0, size),
+		Owner:  owner,
 	}
 
 	for i := 0; i < size; i++ {
 		bp.pool = append(bp.pool, &Bullet{})
 	}
 
-	bulletImg := ebiten.NewImage(bulletWidth, bulletHeight)
-	bulletImg.Fill(color.White)
+	var imagePath string
+	if owner == Player1 {
+		imagePath = "sprites/bullet_blue.png"
+	} else {
+		imagePath = "sprites/bullet_red.png"
+	}
 
-	bp.bulletImg = bulletImg
+	sprite, img, err := ebitenutil.NewImageFromFileSystem(assets.FS, imagePath)
+	if err == nil {
+		bp.bulletImg = sprite
+		bounds := img.Bounds().Size()
+
+		bp.scaleX = 15.0 / float64(bounds.X)
+		bp.scaleY = 15.0 / float64(bounds.Y)
+	}
 
 	return &bp
 }
 
-func (bp *BulletPool) Update(collisions *[][]byte) {
+func (bp *BulletPool) Update(collisions *[][]byte, tanks map[Player]*Tank) {
 	grid := *collisions
 	maxRows := len(grid)
 	maxCols := 0
@@ -62,19 +73,32 @@ func (bp *BulletPool) Update(collisions *[][]byte) {
 		} else {
 			col := int(b.x) / 50
 			row := int(b.y) / 50
-
 			if grid[row][col] == '1' {
 				hit = true
 			}
 		}
 
+		if !hit {
+			for playerID, targetTank := range tanks {
+				if bp.Owner == playerID {
+					continue
+				}
+
+				if b.x >= targetTank.x && b.x <= targetTank.x+float64(targetTank.width) &&
+					b.y >= targetTank.y && b.y <= targetTank.y+float64(targetTank.height) {
+
+					targetTank.healthPoints--
+					hit = true
+					break
+				}
+			}
+		}
+
 		if hit {
 			bp.pool = append(bp.pool, b)
-
 			lastIdx := len(bp.active) - 1
 			bp.active[i] = bp.active[lastIdx]
 			bp.active = bp.active[:lastIdx]
-
 			i--
 		}
 	}
@@ -85,9 +109,24 @@ func (bp *BulletPool) Draw(screen *ebiten.Image) {
 		options := &ebiten.DrawImageOptions{}
 		options.Filter = ebiten.FilterNearest
 
-		options.GeoM.Translate(-(bulletWidth / 2), -(bulletHeight / 2))
+		options.GeoM.Scale(bp.scaleX, bp.scaleY)
 
-		options.GeoM.Translate(b.x+b.offsetX, b.y+b.offsetY)
+		options.GeoM.Translate(-7.5, -7.5)
+
+		switch b.dir {
+		case Up:
+		case Down:
+			options.GeoM.Rotate(math.Pi)
+		case Left:
+			options.GeoM.Rotate(-math.Pi / 2)
+		case Right:
+			options.GeoM.Rotate(math.Pi / 2)
+		}
+
+		options.GeoM.Translate(7.5, 7.5)
+
+		options.GeoM.Translate(b.x+b.offsetX-7.5, b.y+b.offsetY-7.5)
+
 		screen.DrawImage(bp.bulletImg, options)
 	}
 }
