@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/UrielMT343/podtank/assets"
+	"github.com/UrielMT343/podtank/internal/audio"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -20,7 +21,7 @@ type CmdState struct {
 const (
 	initialHP                  = 5
 	initialDmg                 = 14
-	initialSpd                 = 50
+	initialSpd                 = 75
 	cellGridSize               = 50.0
 	moveDelay                  = 15
 	shotDelay                  = 1000
@@ -174,7 +175,7 @@ func (t *Tank) HP() int {
 	return t.healthPoints
 }
 
-func (t *Tank) Update(cmd CmdState, collisions *[][]byte, bp *BulletPool) {
+func (t *Tank) Update(cmd CmdState, collisions *[][]byte, bp *BulletPool, sfx *audio.SoundBank) {
 	mov := float64(t.speed) / 50.0
 	pixelNearest := 5.0
 
@@ -205,6 +206,9 @@ func (t *Tank) Update(cmd CmdState, collisions *[][]byte, bp *BulletPool) {
 
 	if cmd.Shoot && t.shotCooldown == 0 {
 		t.Shoot(bp)
+		if sfx != nil && sfx.Shoot != nil {
+			audio.PlaySFX(sfx.Shoot)
+		}
 		t.shotCooldown = 60
 	}
 
@@ -305,6 +309,10 @@ func (t *Tank) Update(cmd CmdState, collisions *[][]byte, bp *BulletPool) {
 }
 
 func (t *Tank) Draw(screen *ebiten.Image) {
+	if t.IsDead() {
+		return
+	}
+
 	options := &ebiten.DrawImageOptions{}
 	options.Filter = ebiten.FilterNearest
 
