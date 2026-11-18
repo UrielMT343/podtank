@@ -4,17 +4,13 @@ import (
 	"bytes"
 	"math/rand"
 	"time"
-
-	"github.com/UrielMT343/podtank/assets"
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 type Arena struct {
-	Height, Width int
-	Battlefield   *ebiten.Image
-	X, Y          float64
-	Collisions    [][]byte
+	Height, Width         int
+	CellHeight, CellWidth int
+	X, Y                  float64
+	Collisions            [][]byte
 }
 
 func NewArena(height, width, heightGridSize, widthGridSize, screenWidth, screenHeight int) *Arena {
@@ -36,91 +32,27 @@ func NewArena(height, width, heightGridSize, widthGridSize, screenWidth, screenH
 
 	arena.Height = arenaHeight
 	arena.Width = arenaWidth
-	arena.Battlefield = ebiten.NewImage(arenaWidth, arenaHeight)
+	arena.CellHeight = height
+	arena.CellWidth = width
 
-	loadSprite := func(path string) *ebiten.Image {
-		img, _, err := ebitenutil.NewImageFromFileSystem(assets.FS, path)
-		if err != nil {
-			panic(err)
-		}
-		return img
-	}
+	collisions := make([][]byte, actualRows)
 
-	tble := loadSprite("sprites/tile_bound_left_end.png")
-	tbrg := loadSprite("sprites/tile_bound_right_end.png")
-	tbh := loadSprite("sprites/tile_bound_horizontal.png")
-	tbue := loadSprite("sprites/tile_bound_up_end.png")
-	tbde := loadSprite("sprites/tile_bound_down_end.png")
-	tbv := loadSprite("sprites/tile_bound_vertical.png")
-
-	obstacleSprite := loadSprite("sprites/tile_obstacle.png")
-	sandSprite := loadSprite("sprites/tile_sand.png")
-
-	scaleBoundX := float64(width) / 16.0
-	scaleBoundY := float64(height) / 16.0
-
-	obsBounds := obstacleSprite.Bounds().Size()
-	scaleObsX := float64(width) / float64(obsBounds.X)
-	scaleObsY := float64(height) / float64(obsBounds.Y)
-
-	sandBounds := sandSprite.Bounds().Size()
-	scaleSandX := float64(width) / float64(sandBounds.X)
-	scaleSandY := float64(height) / float64(sandBounds.Y)
-
-	var collisions [][]byte
-	collisions = make([][]byte, actualRows)
-
-	for rowIdx := 0; rowIdx < actualRows; rowIdx++ {
+	for rowIdx := range actualRows {
 		collisions[rowIdx] = make([]byte, actualCols)
-		posYTile := float64(rowIdx * height)
 
-		for colIdx := 0; colIdx < actualCols; colIdx++ {
-			posXTile := float64(colIdx * width)
-			options := &ebiten.DrawImageOptions{}
+		isTopOrBottom := rowIdx == 0 || rowIdx == actualRows-1
 
-			isTopOrBottom := rowIdx == 0 || rowIdx == actualRows-1
+		for colIdx := range actualCols {
 			isLeftOrRight := colIdx == 0 || colIdx == actualCols-1
 
 			if isTopOrBottom || isLeftOrRight {
-				options.GeoM.Scale(scaleBoundX, scaleBoundY)
-				options.GeoM.Translate(posXTile, posYTile)
-
-				var tileImg *ebiten.Image
-				if isTopOrBottom {
-					if colIdx == 0 {
-						tileImg = tble
-					} else if colIdx == actualCols-1 {
-						tileImg = tbrg
-					} else {
-						tileImg = tbh
-					}
-				} else {
-					if rowIdx == 1 {
-						tileImg = tbue
-					} else if rowIdx == actualRows-2 {
-						tileImg = tbde
-					} else {
-						tileImg = tbv
-					}
-				}
-
-				arena.Battlefield.DrawImage(tileImg, options)
 				collisions[rowIdx][colIdx] = '1'
-
 			} else {
 				origRow := rowIdx - 1
 				origCol := colIdx - 1
-				c := rows[origRow][origCol]
-
-				if c == '1' {
-					options.GeoM.Scale(scaleObsX, scaleObsY)
-					options.GeoM.Translate(posXTile, posYTile)
-					arena.Battlefield.DrawImage(obstacleSprite, options)
+				if rows[origRow][origCol] == '1' {
 					collisions[rowIdx][colIdx] = '1'
 				} else {
-					options.GeoM.Scale(scaleSandX, scaleSandY)
-					options.GeoM.Translate(posXTile, posYTile)
-					arena.Battlefield.DrawImage(sandSprite, options)
 					collisions[rowIdx][colIdx] = '0'
 				}
 			}
@@ -135,11 +67,4 @@ func NewArena(height, width, heightGridSize, widthGridSize, screenWidth, screenH
 	arena.Y = float64(posY)
 
 	return &arena
-}
-
-func (a *Arena) Draw(screen *ebiten.Image) {
-	options := &ebiten.DrawImageOptions{}
-	options.GeoM.Translate(a.X, a.Y)
-
-	screen.DrawImage(a.Battlefield, options)
 }

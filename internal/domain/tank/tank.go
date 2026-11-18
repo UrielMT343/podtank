@@ -2,12 +2,6 @@ package tank
 
 import (
 	"math"
-
-	"github.com/UrielMT343/podtank/assets"
-	"github.com/UrielMT343/podtank/internal/audio"
-
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 type TankDirection int
@@ -35,55 +29,41 @@ const (
 )
 
 type Tank struct {
-	x, y, offsetX, offsetY, scaleX, scaleY        float64
+	x, y, offsetX, offsetY                        float64
 	direction, lastDirection                      TankDirection
 	height, width, healthPoints, damage, speed    int
-	image                                         *ebiten.Image
 	Player                                        Player
 	shotCooldown                                  int
 	upFrames, downFrames, leftFrames, rightFrames int
 }
 
 func NewTank(spawnX, spawnY, screenOffsetX, screenOffsetY float64, tankWidth, tankHeight int, initialDirection TankDirection, player Player) *Tank {
-	var tank Tank
-	tank.healthPoints = initialHP
-
-	tank.x = spawnX
-	tank.y = spawnY
-
-	tank.offsetX = screenOffsetX
-	tank.offsetY = screenOffsetY
-
-	tank.height = tankHeight
-	tank.width = tankWidth
-
-	tank.direction = initialDirection
-	tank.lastDirection = initialDirection
-	tank.damage = initialDmg
-	tank.speed = initialSpd
-
-	tank.Player = player
-
-	var imagePath string
-	if player == Player1 {
-		imagePath = "sprites/tank_blue.png"
-	} else {
-		imagePath = "sprites/tank_red.png"
+	return &Tank{
+		healthPoints:  initialHP,
+		x:             spawnX,
+		y:             spawnY,
+		offsetX:       screenOffsetX,
+		offsetY:       screenOffsetY,
+		height:        tankHeight,
+		width:         tankWidth,
+		direction:     initialDirection,
+		lastDirection: initialDirection,
+		damage:        initialDmg,
+		speed:         initialSpd,
+		Player:        player,
 	}
-
-	sprite, img, err := ebitenutil.NewImageFromFileSystem(assets.FS, imagePath)
-	if err != nil {
-		panic(err)
-	}
-
-	s := img.Bounds().Size()
-
-	tank.scaleX = float64(tank.width) / float64(s.X)
-	tank.scaleY = float64(tank.height) / float64(s.Y)
-	tank.image = sprite
-
-	return &tank
 }
+
+func (t *Tank) X() float64                   { return t.x }
+func (t *Tank) Y() float64                   { return t.y }
+func (t *Tank) OffsetX() float64             { return t.offsetX }
+func (t *Tank) OffsetY() float64             { return t.offsetY }
+func (t *Tank) Width() int                   { return t.width }
+func (t *Tank) Height() int                  { return t.height }
+func (t *Tank) Direction() TankDirection     { return t.direction }
+func (t *Tank) LastDirection() TankDirection { return t.lastDirection }
+func (t *Tank) IsDead() bool                 { return t.healthPoints <= 0 }
+func (t *Tank) HP() int                      { return t.healthPoints }
 
 func (t *Tank) checkCollision(collisions *[][]byte) bool {
 	grid := *collisions
@@ -157,27 +137,15 @@ func (t *Tank) Shoot(pool *BulletPool) {
 		b.vy = 0
 	}
 
-	bulleDir := t.direction
-	if bulleDir == None {
-		bulleDir = t.lastDirection
-	}
-
-	b.dir = bulleDir
+	b.dir = dir
 
 	pool.active = append(pool.active, b)
 }
 
-func (t *Tank) IsDead() bool {
-	return t.healthPoints <= 0
-}
-
-func (t *Tank) HP() int {
-	return t.healthPoints
-}
-
-func (t *Tank) Update(cmd CmdState, collisions *[][]byte, bp *BulletPool, sfx *audio.SoundBank) {
+func (t *Tank) Update(cmd CmdState, collisions *[][]byte, bp *BulletPool) bool {
 	mov := float64(t.speed) / 50.0
 	pixelNearest := 5.0
+	didShoot := false
 
 	if cmd.Up {
 		t.upFrames++
@@ -206,9 +174,7 @@ func (t *Tank) Update(cmd CmdState, collisions *[][]byte, bp *BulletPool, sfx *a
 
 	if cmd.Shoot && t.shotCooldown == 0 {
 		t.Shoot(bp)
-		if sfx != nil && sfx.Shoot != nil {
-			audio.PlaySFX(sfx.Shoot)
-		}
+		didShoot = true
 		t.shotCooldown = 60
 	}
 
@@ -306,43 +272,6 @@ func (t *Tank) Update(cmd CmdState, collisions *[][]byte, bp *BulletPool, sfx *a
 		t.x = oldX
 		t.y = oldY
 	}
-}
 
-func (t *Tank) Draw(screen *ebiten.Image) {
-	if t.IsDead() {
-		return
-	}
-
-	options := &ebiten.DrawImageOptions{}
-	options.Filter = ebiten.FilterNearest
-
-	options.GeoM.Scale(t.scaleX, t.scaleY)
-
-	dir := t.direction
-	if dir == None {
-		dir = t.lastDirection
-	}
-
-	switch dir {
-	case Up:
-		options.GeoM.Translate(-25, -25)
-		options.GeoM.Rotate(math.Pi)
-		options.GeoM.Translate(25, 25)
-	case Down:
-		options.GeoM.Translate(-25, -25)
-		options.GeoM.Rotate(0.0)
-		options.GeoM.Translate(25, 25)
-	case Left:
-		options.GeoM.Translate(-25, -25)
-		options.GeoM.Rotate(math.Pi / 2)
-		options.GeoM.Translate(25, 25)
-	case Right:
-		options.GeoM.Translate(-25, -25)
-		options.GeoM.Rotate((3 * math.Pi) / 2)
-		options.GeoM.Translate(25, 25)
-	}
-
-	options.GeoM.Translate(t.x+t.offsetX, t.y+t.offsetY)
-
-	screen.DrawImage(t.image, options)
+	return didShoot
 }
